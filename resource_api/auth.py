@@ -13,7 +13,7 @@ def get_claims(authorization: str = Header(..., alias="Authorization")):
     token = authorization.split(" ", 1)[1]
     print("Token: " + token)
     try:
-        claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], audience="resource-api") # Updated by Group D: Added audience claim
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"token invalid: {e}")
     return claims
