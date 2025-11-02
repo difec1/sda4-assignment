@@ -176,6 +176,72 @@ This creates a **self-contained Zero Trust domain** that enforces contextual acc
 
 ---
 
+### 4.3 Conclusions
+
+- **Centralised authentication** offers consistent, auditable identity and governance.
+- **Decentralised authentication** adds flexibility and resilience for isolated domains.
+- **Contextual verification** (time, device, sensitivity) adds measurable Zero Trust value to both.
+- A **hybrid approach** could combine central token issuance with local context enforcement.
+
+> Zero Trust is less about _where_ authentication happens, and more about **continuous, context-aware verification for every request**.
+
+---
+
+## 4.4 Application of Zero Trust Principles (“Never trust, always verify”)
+
+### 4.4.1 Concept
+Zero Trust removes all forms of implicit trust from networks, sessions, and identities. Every request must be explicitly authenticated, authorized, and verified against contextual parameters. In our prototype, trust is earned dynamically per request through signed tokens (representing identity) and context-specific rules that evaluate time, device, and sensitivity.
+
+### 4.4.2 How our system applies Zero Trust
+**Per-request verification** 
+The Resource API checks the validity of **every** request (`resource_api/auth.py:get_claims()`) by decoding the attached JSON Web Token (JWT). During this process, it verifies the token’s digital signature and confirms that the `aud` (audience) claim matches `resource-api`. This ensures that only tokens intended for this specific service are accepted, rather than trusting requests based on their network location.
+While the IdP includes an iss (issuer) claim in every JWT to indicate the source of issuance, the Resource API does not yet validate this claim during token decoding. This means tokens signed with the correct secret and audience are accepted regardless of the declared issuer. In a production setup, adding issuer validation would ensure that only tokens from the legitimate IdP are trusted.
+
+**Contextual access control.** Each request is evaluated in `resource_api/context.py:evaluate_request_context()` based on its context rather than network position:
+- **Device-based**: If a request without a valid `device_id`, access is **denied** and the API returns HTTP 403 with the message `denied by context policy`.
+- **Time-based**: Access outside the defined business hours (07:00–19:00) is **denied** for normal users and **challenged** for administrators, reflecting different risk levels.
+- **Sensitivity-based**: Requests to sensitive endpoints such as `/export` are permitted only for users with the `role=administrator` **and** `clearance_level=Restricted`. Other users receive a **challenge** response (`{"status":"mfa_required","reason":"sensitive endpoint"}`) that simulates a step-up verification.
+
+**Least privilege.** Access to sensitive actions is strictly limited to users with the appropriate roles and clearance level.
+
+**Fail-closed.** If required contextual information is missing or cannot be verified (e.g., no `device_id` provided), the system denies the request rather than defaulting to implicit trust (-> fallback to network trust).
+
+**Decentralised enforcement.** The Local Service (`local_service/app.py`) handles authentication independently of the IdP. It issues short-lived local tokens and each protected endpoint re-verifies these tokens while applying trust scoring and MFA checks, ensuring that no implicit or transitive trust is granted between systems.
+
+### 4.4.2.1 Zero Trust Principle Mapping
+The following table summarises how the core Zero Trust principles are reflected in our implementation and where each concept is applied in the codebase:
+
+
+| Principle                     | Implementation Location                      | Description |
+|-------------------------------|----------------------------------------------|-------------|
+| Verify every request          | `resource_api/auth.py:get_claims()`          | The JWT is verified on each call, including signature, exp, aud. |
+| Context-aware access control  | `resource_api/context.py:evaluate_request_context()` | Access decisions are based on time, device and sensitivity. |
+| Least privilege               | `context.py` (export rule)                   | Access to sensitive endpoints is restricted to administrators with the appropriate clearance. |
+| Fail closed                   | `context.py`                                | Missing or unverifiable context results in denial of access (no fallback trust). |
+| Decentralised verification    | `local_service/app.py`                       | Local authentification with trust scoring and MFA independent of IdP. |
+
+
+### 4.4.3 Evidence (selected tests)
+Test 1: 
+    When a user logs in without providing a `device_id` and subsequently calls `/resource`, the request is denied with **HTTP 403** and the message `"denied by context policy"`. This demonstrates that device trust is mandatory.
+
+Test 2:
+    For sensitive endpoints, such as `/export`, access is permitted only for users with the role `administrator` and `clearance_level = Restricted` (e.g., `root`). Other users receive a challenge response (`{"status":"mfa_required","reason":"sensitive endpoint"}`), ensuring that additional verification is required before accessing restricted data. These results demonstrate that trust is evaluated on a per-request basis and in accordance with contextual risk.
+  
+
+### 4.4.4 Limitations and mitigations
+- **Shared secret (HS256):** migrate to **RS256 + JWKS** to avoid key sharing and enable rotation.
+- **Static context risk:** time-based checks are computed at module load time, not per request.
+- **Issuer binding:** not enforced in this PoC, but recommended for stricter token validation.
+- **Replay protection:** current `jti` is static, dynamic values are recommended.
+- **Step-up auth:** simulated challenge could be replaced with real TOTP-MFA.
+- **Observability:** decision logging (`sub`, `path`, `decision`, `reason`) would support audits and tuning.
+
+### 4.4.5 Conclusion
+Our prototype embodies Zero Trust by verifying identity and context on every request and by denying access when context is missing or high-risk. Sensitive actions are guarded by least-privilege checks and step-up challenges. While certain checks (issuer binding, dynamic `jti`, per-request time evaluation) remain simplified, the core principle `“never trust, always verify”` is demonstrably enforced in both centralised and decentralised authentication flows.
+
+---
+
 ## 5. Recommendations and Visual Summary
 
 ### 5.1 Recommendations
