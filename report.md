@@ -176,17 +176,6 @@ This creates a **self-contained Zero Trust domain** that enforces contextual acc
 
 ---
 
-### 4.3 Conclusions
-
-- **Centralised authentication** offers consistent, auditable identity and governance.
-- **Decentralised authentication** adds flexibility and resilience for isolated domains.
-- **Contextual verification** (time, device, sensitivity) adds measurable Zero Trust value to both.
-- A **hybrid approach** could combine central token issuance with local context enforcement.
-
-> Zero Trust is less about _where_ authentication happens, and more about **continuous, context-aware verification for every request**.
-
----
-
 ## 4.4 Application of Zero Trust Principles (“Never trust, always verify”)
 
 ### 4.4.1 Concept
